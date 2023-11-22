@@ -1,12 +1,13 @@
 import sys,os,csv, random
 import numpy as np
-from sklearn.externals import joblib
+# from sklearn.externals import joblib
+import joblib
 from keras.layers import Input, Dense, Reshape, Flatten, Dropout, multiply, Activation
 from keras.layers import BatchNormalization, Activation, Embedding, ZeroPadding2D
 from keras.layers import Conv2D, Conv2DTranspose, Dropout, UpSampling2D, MaxPooling2D
-from keras.layers.advanced_activations import LeakyReLU
+from keras.layers import LeakyReLU
 from keras.models import Sequential, Model
-import keras.layers.merge as merge
+from keras.layers import concatenate
 from keras.optimizers import SGD, Adam, RMSprop
 from sklearn.utils import shuffle
 import time
@@ -14,10 +15,12 @@ import scipy
 from keras.models import load_model
 import keras.backend as K
 from collections import deque
-import scipy.misc
+# import scipy.misc
+import imageio
 from keras.utils import to_categorical
 
 MODEL_DIR = 'pretrained_models'
+OUT_DIR = 'out'
 def build_generator():
     kernel_init = 'glorot_uniform'
     latent_size = 100
@@ -45,11 +48,11 @@ def build_generator():
     eyes_class = Input(shape=(1,), dtype='int32')
     hairs_class = Input(shape=(1,), dtype='int32')
     # embedding 
-    eyes = Flatten()(Embedding(num_class_eyes, 8,  init='glorot_normal')(eyes_class))
-    hairs = Flatten()(Embedding(num_class_hairs, 8,  init='glorot_normal')(hairs_class))
-    h = merge([latent, hairs, eyes], mode='concat')
+    eyes = Flatten()(Embedding(num_class_eyes, 8)(eyes_class))
+    hairs = Flatten()(Embedding(num_class_hairs, 8)(hairs_class))
+    h = concatenate([latent, hairs, eyes])
     fake_image = model(h)
-    m = Model(input=[latent, hairs_class, eyes_class], output=fake_image)
+    m = Model([latent, hairs_class, eyes_class], fake_image)
     return m
 
 def gen_noise(batch_size, latent_size):
@@ -70,7 +73,7 @@ def generate_images(generator, latent_size, hair_color, eyes_color, testing_id):
     fake_data_X = generator.predict([noise, hairs, eyes])
     for i in range(5):
         img = denorm_img(fake_data_X[i])
-        scipy.misc.imsave(os.path.join(MODEL_DIR,'sample_' +str(testing_id) +'_' + str(i+1)  +'.jpg'), img)
+        imageio.imwrite(os.path.join(OUT_DIR,'sample_' +str(testing_id) +'_' + str(i+1)  +'.jpg'), img)
     
         
     # idx = np.random.randint(1, size = 16)[0]

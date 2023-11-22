@@ -2,15 +2,15 @@ import sys, os, csv, time, random
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import skimage, skimage.io, skimage.transform
 import numpy as np
-from sklearn.externals import joblib
+import joblib
 from keras.layers import Input, Dense, Reshape, Flatten, Dropout, multiply, Activation
 from keras.layers import BatchNormalization, Activation, Embedding, ZeroPadding2D
 from keras.layers import Conv2D, Conv2DTranspose, Dropout, UpSampling2D, MaxPooling2D
-from keras.layers.advanced_activations import LeakyReLU
+from keras.layers import LeakyReLU
 from keras.models import Sequential, Model, load_model
 from keras.optimizers import SGD, Adam, RMSprop
 from keras.utils import to_categorical
-import keras.layers.merge as merge
+from keras.layers import concatenate
 import keras.backend as K
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -38,7 +38,7 @@ EYES = [  'gray eyes', 'black eyes', 'orange eyes','pink eyes', 'yellow eyes', '
 
 def tag_preprocess(data_path):
    
-    with open(os.path.join(data_path, 'tags_clean.csv'), 'r') as file:
+    with open(os.path.join('tags_clean.csv'), 'r') as file:
         lines = csv.reader(file, delimiter=',')
         y_hairs = []
         y_eyes = []
@@ -103,9 +103,9 @@ class AnimeACGAN(object):
         if not (os.path.exists(self.model_dir)):
             os.makedirs(self.model_dir)
 
-        self.y_hairs, self.y_eyes, self.y_index = tag_preprocess(self.train_path)
-        self.X_data = load_data(self.train_path, self.y_hairs, self.y_eyes, self.y_index )
-        print('X_data: {}, y_hairs: {},  y_eyes"{}'.format(self.X_data.shape, self.y_hairs.shape,self.y_eyes.shape ))
+        # self.y_hairs, self.y_eyes, self.y_index = tag_preprocess(self.train_path)
+        # self.X_data = load_data(self.train_path, self.y_hairs, self.y_eyes, self.y_index )
+        # print('X_data: {}, y_hairs: {},  y_eyes"{}'.format(self.X_data.shape, self.y_hairs.shape,self.y_eyes.shape ))
 
         self.generator, self.discriminator, self.gan = self.build_ACGAN()
 
@@ -135,13 +135,14 @@ class AnimeACGAN(object):
         eyes_class = Input(shape=(1,), dtype='int32')
         hairs_class = Input(shape=(1,), dtype='int32')
         # embedding
-        hairs = Flatten()(Embedding(self.num_class_hairs, 8,  init='glorot_normal')(hairs_class))    
-        eyes = Flatten()(Embedding(self.num_class_eyes, 8,  init='glorot_normal')(eyes_class))
+        hairs = Flatten()(Embedding(self.num_class_hairs, 8)(hairs_class))    
+        eyes = Flatten()(Embedding(self.num_class_eyes, 8)(eyes_class))
         # concat_style = merge([hairs, eyes], name='concat_style', mode='concat')
-        h = merge([latent, hairs, eyes], mode='concat')
+        h = concatenate([latent, hairs, eyes])
         fake_image = model(h)
-        m = Model(input=[latent, hairs_class, eyes_class], output=fake_image)
-        # m.summary()
+        m = Model([latent, hairs_class, eyes_class], fake_image)
+        m.summary()
+        print('XXX---------------XXX')
         return m
 
     def build_discriminator_model(self, num_class = 12):
@@ -165,7 +166,8 @@ class AnimeACGAN(object):
         label_hair = Dense(self.num_class_hairs, activation="softmax")(features)
         label_eyes = Dense(self.num_class_eyes, activation="softmax")(features)
         m = Model(dis_input, [validity, label_hair, label_eyes])
-        # m.summary()
+        m.summary()
+        print('XXX-----------------XXX')
         return m
 
     def build_ACGAN(self):
@@ -185,7 +187,7 @@ class AnimeACGAN(object):
         eyes_inp = Input(shape=(1,), dtype='int32')
         GAN_inp = generator([gen_inp, hairs_inp, eyes_inp])
         GAN_opt = discriminator(GAN_inp)
-        gan = Model(input = [gen_inp,hairs_inp,eyes_inp], output = GAN_opt)
+        gan = Model([gen_inp,hairs_inp,eyes_inp], GAN_opt)
         gan.compile(loss = losses, optimizer = opt, metrics=['accuracy'])
         gan.summary()
         return generator, discriminator, gan
